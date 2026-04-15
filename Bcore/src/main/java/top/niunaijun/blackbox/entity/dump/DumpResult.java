@@ -20,6 +20,8 @@ public class DumpResult implements Parcelable {
     public String packageName;
     public String msg;
     public String dir;
+    public String shellProfile;
+    public String strategy;
 
     private int status = STATUS_RUNNING;
     public int totalProcess;
@@ -61,6 +63,8 @@ public class DumpResult implements Parcelable {
                 "packageName='" + packageName + '\'' +
                 ", msg='" + msg + '\'' +
                 ", dir='" + dir + '\'' +
+                ", shellProfile='" + shellProfile + '\'' +
+                ", strategy='" + strategy + '\'' +
                 ", status=" + status +
                 ", totalProcess=" + totalProcess +
                 ", currProcess=" + currProcess +
@@ -77,6 +81,8 @@ public class DumpResult implements Parcelable {
         dest.writeString(this.packageName);
         dest.writeString(this.msg);
         dest.writeString(this.dir);
+        dest.writeString(this.shellProfile);
+        dest.writeString(this.strategy);
         dest.writeInt(this.status);
         dest.writeInt(this.totalProcess);
         dest.writeInt(this.currProcess);
@@ -86,6 +92,8 @@ public class DumpResult implements Parcelable {
         this.packageName = source.readString();
         this.msg = source.readString();
         this.dir = source.readString();
+        this.shellProfile = source.readString();
+        this.strategy = source.readString();
         this.status = source.readInt();
         this.totalProcess = source.readInt();
         this.currProcess = source.readInt();
@@ -98,6 +106,8 @@ public class DumpResult implements Parcelable {
         this.packageName = in.readString();
         this.msg = in.readString();
         this.dir = in.readString();
+        this.shellProfile = in.readString();
+        this.strategy = in.readString();
         this.status = in.readInt();
         this.totalProcess = in.readInt();
         this.currProcess = in.readInt();
