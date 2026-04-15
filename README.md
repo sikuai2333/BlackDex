@@ -27,6 +27,12 @@ BlackDex是一个运行在Android手机上的脱壳工具，支持5.0～12，无
 - hook_xxxx.dex **hook系统api脱壳的dex，深度脱壳不修复**
 - cookie_xxxx.dex **利用dexFile cookie脱壳的dex，深度脱壳时会修复此dex**
 
+### 导出报告与分阶段策略（新增）
+- DumpPostProcessor导出后自动修复：DEX头校验、magic偏移carve（`*_carved.dex`）、header magic修复（`*_repaired.dex`）、SHA-256去重统计（`dump_postprocess_report.json`）
+- 可插拔DumpEngine架构：当前内置cookie+hook引擎，后续可按需接入更多脱壳引擎并统一调度。
+每次脱壳任务结束后，BlackDex会在dump目录下生成 `dump_reports/dump_report_<timestamp>.json`，用于记录输入类型、尝试次数、耗时、结果状态、导出文件清单，便于失败排查与批量分析。
+
+在新版本中，针对常见壳（如360/梆梆/爱加密）会根据壳指纹自动切换多阶段延时导出策略，以应对延迟解密、二次加载等场景。
 
 ## 脱壳原理
 通过DexFile cookie进行脱壳，理论兼容art开始的所有版本。可能少数因设备而异，绝大部分是支持的。资源有限无法大量测试，遇到问题请提issues.

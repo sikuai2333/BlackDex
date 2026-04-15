@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import dalvik.system.DexFile;
 import top.niunaijun.blackbox.BlackBoxCore;
 import top.niunaijun.blackbox.app.BActivityThread;
+import top.niunaijun.blackbox.core.DumpPostProcessor;
 import top.niunaijun.blackbox.entity.dump.DumpResult;
 import top.niunaijun.blackbox.utils.DexUtils;
 import top.niunaijun.blackbox.utils.FileUtils;
@@ -51,6 +52,13 @@ public class VMCore {
     private static native void cookieDumpDex(long cookie, String dir, boolean fixMethod);
 
     private static native void hookDumpDex(String dir);
+
+
+    public static void triggerHookDump(String packageName) {
+        File file = new File(BlackBoxCore.get().getDexDumpDir(), packageName);
+        FileUtils.mkdirs(file);
+        hookDumpDex(file.getAbsolutePath());
+    }
 
     public static void cookieDumpDex(ClassLoader classLoader, String packageName) {
         List<Long> cookies = DexFileCompat.getCookies(classLoader);
@@ -97,6 +105,7 @@ public class VMCore {
                 }
             }
         }
+        DumpPostProcessor.process(file);
     }
 
     @Keep

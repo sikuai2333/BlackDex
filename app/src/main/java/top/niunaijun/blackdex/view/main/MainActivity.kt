@@ -167,10 +167,11 @@ class MainActivity : PermissionActivity() {
                 }
 
                 if (result.isSuccess) {
+                    val detailMsg = if (result.msg.isNullOrBlank()) "" else "\n\n" + result.msg
                     viewModel.mDexDumpLiveData.postValue(
                         DumpInfo(
                             DumpInfo.SUCCESS,
-                            getString(R.string.dex_save, result.dir)
+                            getString(R.string.dex_save, result.dir) + detailMsg
                         )
                     )
                 } else {

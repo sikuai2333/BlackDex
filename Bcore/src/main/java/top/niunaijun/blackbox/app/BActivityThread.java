@@ -21,6 +21,13 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
+import org.json.JSONObject;
+
+import top.niunaijun.blackbox.core.ShellProfileDetector;
+import top.niunaijun.blackbox.core.dump.engine.DumpContext;
+import top.niunaijun.blackbox.core.dump.engine.DumpEngineRegistry;
+import top.niunaijun.blackbox.core.dump.engine.EngineResult;
+
 import reflection.android.app.ActivityThread;
 import reflection.android.app.ContextImpl;
 import reflection.android.app.LoadedApk;
@@ -215,23 +222,102 @@ public class BActivityThread extends IBActivityThread.Stub {
 
     private void handleDumpDex(String packageName, DumpResult result, ClassLoader classLoader) {
         new Thread(() -> {
+            boolean isFixCode = BlackBoxCore.get().isFixCodeItem();
+            String shellProfile = ShellProfileDetector.detect(classLoader, packageName);
+            int[] stageDelays = ShellProfileDetector.dumpDelayStrategy(shellProfile, isFixCode);
+            result.shellProfile = shellProfile;
+            result.strategy = Arrays.toString(stageDelays);
             try {
-                Thread.sleep(500);
-            } catch (InterruptedException ignored) {
-            }
-            try {
-                VMCore.cookieDumpDex(classLoader, packageName);
+                for (int i = 0; i < stageDelays.length; i++) {
+                    sleepSafely(stageDelays[i]);
+                    BlackBoxCore.getBDumpManager().noticeMonitor(result.dumpProcess(stageDelays.length, i + 1));
+                    String engineSummary = executeDumpEngines(classLoader, packageName, result.dir, isFixCode);
+                    result.msg = "shell=" + shellProfile + ", strategy=" + result.strategy + ", engines=" + engineSummary;
+                    if (hasEnoughDexArtifacts(result.dir, shellProfile)) {
+                        break;
+                    }
+                }
             } finally {
                 mAppConfig = null;
                 File dir = new File(result.dir);
-                if (!dir.exists() || dir.listFiles().length == 0) {
-                    BlackBoxCore.getBDumpManager().noticeMonitor(result.dumpError("not found dex file"));
+                File[] dumpedFiles = dir.listFiles();
+                if (!dir.exists() || dumpedFiles == null || dumpedFiles.length == 0) {
+                    BlackBoxCore.getBDumpManager().noticeMonitor(result.dumpError("not found dex file, shell=" + shellProfile + ", strategy=" + result.strategy));
                 } else {
+                    String postSummary = getPostProcessSummary(result.dir);
+                    if (postSummary.length() > 0) {
+                        result.msg = result.msg + ", post=" + postSummary;
+                    }
                     BlackBoxCore.getBDumpManager().noticeMonitor(result.dumpSuccess());
                 }
                 BlackBoxCore.get().uninstallPackage(packageName);
             }
         }).start();
+    }
+
+    private String executeDumpEngines(ClassLoader classLoader, String packageName, String dumpDir, boolean fixCodeItem) {
+        DumpContext context = new DumpContext(classLoader, packageName, dumpDir, fixCodeItem);
+        List<EngineResult> results = DumpEngineRegistry.get().executeAll(context);
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < results.size(); i++) {
+            EngineResult result = results.get(i);
+            if (i > 0) {
+                builder.append(";");
+            }
+            builder.append(result.engine)
+                    .append(":")
+                    .append(result.skipped ? "skip" : (result.success ? "ok" : "fail"))
+                    .append("#dex=")
+                    .append(result.dexCount)
+                    .append("#ms=")
+                    .append(result.durationMs);
+        }
+        return builder.toString();
+    }
+
+    private String getPostProcessSummary(String dumpDir) {
+        try {
+            File report = new File(dumpDir, "dump_postprocess_report.json");
+            if (!report.exists()) {
+                return "";
+            }
+            String text = top.niunaijun.blackbox.utils.FileUtils.readToString(report.getAbsolutePath());
+            JSONObject jsonObject = new JSONObject(text);
+            return "carved=" + jsonObject.optInt("carvedCount", 0)
+                    + "/repaired=" + jsonObject.optInt("repairedCount", 0)
+                    + "/dup=" + jsonObject.optInt("duplicateSha256", 0);
+        } catch (Throwable e) {
+            return "";
+        }
+    }
+
+    private void sleepSafely(int millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException ignored) {
+        }
+    }
+
+    private boolean hasEnoughDexArtifacts(String dirPath, String shellProfile) {
+        File dir = new File(dirPath);
+        File[] files = dir.listFiles();
+        if (files == null || files.length == 0) {
+            return false;
+        }
+
+        int dexCount = 0;
+        long totalDexSize = 0L;
+        for (File file : files) {
+            if (file.isFile() && file.getName().endsWith(".dex")) {
+                dexCount++;
+                totalDexSize += file.length();
+            }
+        }
+
+        if (ShellProfileDetector.SHELL_UNKNOWN.equals(shellProfile)) {
+            return dexCount >= 1 && totalDexSize >= 64 * 1024;
+        }
+        return dexCount >= 2 && totalDexSize >= 128 * 1024;
     }
 
     private Context createPackageContext(ApplicationInfo info) {
